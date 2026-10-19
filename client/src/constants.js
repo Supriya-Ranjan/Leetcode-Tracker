@@ -1,0 +1,40 @@
+export const DIFFS = ["Easy", "Medium", "Hard"];
+
+export const DS = [
+  "Array",
+  "String",
+  "Hash Table",
+  "Linked List",
+  "Stack",
+  "Queue",
+  "Heap / Priority Queue",
+  "Tree",
+  "Binary Search Tree",
+  "Trie",
+  "Graph",
+  "Matrix",
+  "Set",
+];
+
+export const PAT = [
+  "Two Pointers",
+  "Sliding Window",
+  "Fast & Slow Pointers",
+  "Binary Search",
+  "Prefix Sum",
+  "Merge Intervals",
+  "Cyclic Sort",
+  "Monotonic Stack",
+  "Backtracking",
+  "Recursion",
+  "DFS",
+  "BFS",
+  "Topological Sort",
+  "Union Find",
+  "Dynamic Programming",
+  "Greedy",
+  "Divide & Conquer",
+  "Sorting",
+  "Top K Elements",
+  "Bit Manipulation",
+];

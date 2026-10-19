@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>LeetCode Tracker</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <h1>LeetCode Tracker</h1>
+        <div class="user" id="user">Connecting…</div>
+      </header>
+
+      <div class="card">
+        <div class="prog">
+          <span id="pt">0 of 0 solved</span><span id="pp">0%</span>
+        </div>
+        <div class="bar"><i id="pb"></i></div>
+        <div class="stats" id="stats"></div>
+      </div>
+
+      <div class="filters" id="filters"></div>
+      <div class="card" id="list"><div class="empty">Loading…</div></div>
+
+      <div class="card hide" id="admin">
+        <h2 id="fh">Add a problem (admin)</h2>
+        <form id="f">
+          <input
+            class="full"
+            id="title"
+            placeholder="Problem title (e.g. Two Sum)"
+            required
+          />
+          <input id="num" type="number" min="1" placeholder="LeetCode #" />
+          <select id="diff">
+            <option>Easy</option>
+            <option selected>Medium</option>
+            <option>Hard</option>
+          </select>
+          <select id="ds"></select>
+          <select id="pat"></select>
+          <input
+            class="full"
+            id="url"
+            type="url"
+            placeholder="Problem link (e.g. https://leetcode.com/problems/two-sum)"
+            required
+          />
+          <button class="pri full" id="sb" type="submit">Add problem</button>
+        </form>
+        <div class="note" id="note"></div>
+      </div>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>

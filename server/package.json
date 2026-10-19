@@ -1,0 +1,22 @@
+{
+  "name": "leetcode-tracker-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "dev": "nodemon --watch src --watch .env --ext js,json --exec \"node --env-file-if-exists=.env src/index.js\"",
+    "start": "node --env-file-if-exists=.env src/index.js",
+    "make-admin": "node --env-file-if-exists=.env scripts/make-admin.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}
