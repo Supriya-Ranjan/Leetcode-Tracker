@@ -3,13 +3,43 @@ import pg from "pg";
 // Return BIGINT columns (e.g. `created`) as numbers instead of strings.
 pg.types.setTypeParser(20, Number);
 
-const url = process.env.DATABASE_URL;
-if (!url) {
+function decode(s) {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s;
+  }
+}
+
+// Make a pasted connection string safe to parse: trim stray quotes/whitespace and
+// URL-encode the username and password, so characters like @ # / ? : in a password
+// don't get mistaken for the host. Already-encoded values (%40) are left as they are.
+function normalizeUrl(raw) {
+  const s = raw.trim().replace(/^(["'])(.*)\1$/, "$2");
+  const m = /^(postgres(?:ql)?:\/\/)(.*)@([^@]*)$/.exec(s);
+  if (!m) return s;
+  const [, scheme, userinfo, hostAndPath] = m;
+  const i = userinfo.indexOf(":");
+  const enc = (x) => encodeURIComponent(decode(x));
+  const auth = i < 0 ? enc(userinfo) : enc(userinfo.slice(0, i)) + ":" + enc(userinfo.slice(i + 1));
+  return `${scheme}${auth}@${hostAndPath}`;
+}
+
+if (!process.env.DATABASE_URL) {
   console.error("DATABASE_URL is not set. Copy server/.env.example to server/.env and fill it in.");
   process.exit(1);
 }
+const url = normalizeUrl(process.env.DATABASE_URL);
 
 const isLocal = /@(localhost|127\.0\.0\.1)[:/]/.test(url);
+
+try {
+  const u = new URL(url);
+  console.log(`Connecting to Postgres at ${u.hostname}:${u.port || 5432} as ${decode(u.username)}`);
+} catch {
+  console.error("DATABASE_URL doesn't look like a postgresql:// connection string.");
+  process.exit(1);
+}
 
 export const pool = new pg.Pool({
   connectionString: url,
