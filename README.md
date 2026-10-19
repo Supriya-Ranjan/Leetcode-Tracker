@@ -12,6 +12,7 @@ A shared LeetCode practice tracker for a group. Admins curate a list of problems
 - **Progress**: mark problems solved (with the date), see overall and per-difficulty progress, filter by status, difficulty, data structure or pattern.
 - **Notes**: each user keeps their own note per problem (approach, complexity, mistakes). Other users never see them.
 - **Profiles**: name, education, location, bio, profile picture, and links (GitHub, LinkedIn, LeetCode, X, website). Users can change their password.
+- **Forgot password**: "Forgot password?" on the sign-in screen emails a one-time reset link (valid 30 minutes).
 - **Roles**: everyone who signs up is a **member**. **Admins** can add, edit and delete problems, see all users, and promote or demote them.
 
 | | Member | Admin |
@@ -93,6 +94,12 @@ Set in `server/.env` locally, or as environment variables when deployed:
 |---|:-:|---|
 | `DATABASE_URL` | ✓ | Postgres connection string |
 | `PORT` | | API port (default `4000`) |
+| `BREVO_API_KEY` | for emails | [Brevo](https://www.brevo.com) API key, used to send password reset emails |
+| `MAIL_FROM` | for emails | Sender address, verified in Brevo |
+| `MAIL_FROM_NAME` | | Sender name (default `LeetCode Tracker`) |
+| `APP_URL` | | Public URL used in reset links. Defaults to Render's `RENDER_EXTERNAL_URL`, else `http://localhost:5173` |
+
+Without `BREVO_API_KEY` and `MAIL_FROM`, reset links are printed in the server log instead of emailed, which is enough for local development. Email goes through Brevo's HTTPS API rather than SMTP because Render's free tier blocks outbound SMTP ports.
 
 ## Project structure
 
@@ -123,8 +130,10 @@ All endpoints except register and login need an `Authorization: Bearer <token>` 
 
 | Method | Path | Who | Description |
 |---|---|---|---|
-| POST | `/api/auth/register` | anyone | Create an account `{ username, password }` |
-| POST | `/api/auth/login` | anyone | Sign in `{ username, password }` → `{ token, user }` |
+| POST | `/api/auth/register` | anyone | Create an account `{ username, email, password }` |
+| POST | `/api/auth/login` | anyone | Sign in `{ username, password }` (username or email) → `{ token, user }` |
+| POST | `/api/auth/forgot` | anyone | Email a reset link `{ email }`; same response whether or not the account exists |
+| POST | `/api/auth/reset` | anyone | Set a new password `{ token, password }`; signs out all sessions, returns `{ token, user }` |
 | POST | `/api/auth/logout` | user | End the current session |
 | GET | `/api/me` | user | Current user |
 | GET | `/api/profile` | user | Own full profile |
@@ -145,6 +154,7 @@ Four tables, created automatically by [`server/src/db.js`](server/src/db.js):
 
 - `users`: account, role and profile fields. Passwords are hashed with scrypt and a per-user salt.
 - `sessions`: login tokens.
+- `password_resets`: pending reset links. Only a SHA-256 hash of each token is stored.
 - `problems`: the shared problem list.
 - `progress`: one row per user per problem (solved date and note).
 
@@ -160,7 +170,7 @@ The API serves the built React app, so it deploys as a single Node.js web servic
 |---|---|
 | Build command | `npm run install:all && npm run build` |
 | Start command | `npm start` |
-| Environment | `DATABASE_URL` (the same Session pooler string) |
+| Environment | `DATABASE_URL` (the same Session pooler string), plus `BREVO_API_KEY` and `MAIL_FROM` for reset emails |
 
 No persistent disk is needed; all data lives in Supabase.
 

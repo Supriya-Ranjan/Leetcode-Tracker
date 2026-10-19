@@ -13,16 +13,30 @@ export function checkPassword(password, salt, hash) {
 
 export async function createSession(userId) {
   const token = randomBytes(32).toString("hex");
-  await pool.query("INSERT INTO sessions (token, user_id, created) VALUES ($1, $2, $3)", [
-    token,
-    userId,
-    Date.now(),
-  ]);
+  await pool.query("INSERT INTO sessions (token, user_id, created) VALUES ($1, $2, $3)", [token, userId, Date.now()]);
   return token;
 }
 
 export function publicUser(u) {
-  return { id: u.id, username: u.username, isAdmin: !!u.is_admin, name: u.name || "", avatar: u.avatar || null };
+  return {
+    id: u.id,
+    username: u.username,
+    isAdmin: !!u.is_admin,
+    name: u.name || "",
+    avatar: u.avatar || null,
+    email: u.email || "",
+  };
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Returns a lower-cased email, "" if blank, or null if it isn't a valid address.
+export function readEmail(value) {
+  const v = String(value ?? "")
+    .trim()
+    .toLowerCase();
+  if (!v) return "";
+  return v.length <= 254 && EMAIL_RE.test(v) ? v : null;
 }
 
 // Everything the profile page shows and edits.

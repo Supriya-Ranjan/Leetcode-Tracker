@@ -1,4 +1,5 @@
 import express from "express";
+import { createHash, randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,9 +10,11 @@ import {
   fullProfile,
   hashPassword,
   publicUser,
+  readEmail,
   requireAdmin,
   requireAuth,
 } from "./auth.js";
+import { mailConfigured, sendMail } from "./mail.js";
 
 const app = express();
 // Profile pictures arrive as base64 data URLs, so allow a bit more than the 100kb default.
@@ -19,13 +22,22 @@ app.use(express.json({ limit: "1mb" }));
 
 // ---------- auth ----------
 
+// Unique-index violations → a message about which field clashed.
+function duplicateError(err) {
+  if (err.code !== "23505") return null;
+  return err.constraint === "users_email_lower"
+    ? "That email is already used by another account."
+    : "That username is taken.";
+}
+
 app.post("/api/auth/register", async (req, res) => {
   const username = String(req.body?.username || "").trim();
   const password = String(req.body?.password || "");
+  const email = readEmail(req.body?.email);
   if (!/^[\w.-]{3,32}$/.test(username))
     return res.status(400).json({ error: "Username must be 3–32 letters, numbers, _ . or -" });
-  if (password.length < 6)
-    return res.status(400).json({ error: "Password must be at least 6 characters." });
+  if (!email) return res.status(400).json({ error: "Please enter a valid email address." });
+  if (password.length < 6) return res.status(400).json({ error: "Password must be at least 6 characters." });
 
   const { salt, hash } = hashPassword(password);
   let user;
@@ -33,26 +45,118 @@ app.post("/api/auth/register", async (req, res) => {
     // New accounts are always members; admins promote them from the Members page
     // (or with `npm run make-admin <username>`).
     user = await one(
-      `INSERT INTO users (username, pw_hash, salt, is_admin, created)
-       VALUES ($1, $2, $3, FALSE, $4)
+      `INSERT INTO users (username, email, pw_hash, salt, is_admin, created)
+       VALUES ($1, $2, $3, $4, FALSE, $5)
        RETURNING *`,
-      [username, hash, salt, Date.now()],
+      [username, email, hash, salt, Date.now()],
     );
   } catch (err) {
-    if (err.code === "23505") return res.status(409).json({ error: "That username is taken." });
+    const dup = duplicateError(err);
+    if (dup) return res.status(409).json({ error: dup });
     throw err;
   }
   res.status(201).json({ token: await createSession(user.id), user: publicUser(user) });
 });
 
+// `username` may be either the username or the account's email.
 app.post("/api/auth/login", async (req, res) => {
-  const username = String(req.body?.username || "").trim();
+  const login = String(req.body?.username || "").trim();
   const password = String(req.body?.password || "");
-  const user = await one("SELECT * FROM users WHERE lower(username) = lower($1)", [username]);
+  const user = await one("SELECT * FROM users WHERE lower(username) = lower($1) OR lower(email) = lower($1)", [login]);
   if (!user || !checkPassword(password, user.salt, user.pw_hash))
-    return res.status(401).json({ error: "Wrong username or password." });
+    return res.status(401).json({ error: "Wrong username, email or password." });
   res.json({ token: await createSession(user.id), user: publicUser(user) });
 });
+
+// ---------- forgot / reset password ----------
+
+const RESET_TTL = 30 * 60 * 1000; // links are valid for 30 minutes
+const RESET_COOLDOWN = 60 * 1000; // at most one email per account per minute
+
+// Reset links must point at our own site, never at whatever Host header a request sent.
+// Render sets RENDER_EXTERNAL_URL automatically; APP_URL overrides it.
+const APP_URL = (process.env.APP_URL || process.env.RENDER_EXTERNAL_URL || "http://localhost:5173").replace(/\/$/, "");
+
+const sha256 = (s) => createHash("sha256").update(s).digest("hex");
+
+// Body: { email }. Always answers the same way, so it can't be used to find out
+// which emails have accounts.
+app.post("/api/auth/forgot", async (req, res) => {
+  const email = readEmail(req.body?.email);
+  if (!email) return res.status(400).json({ error: "Please enter a valid email address." });
+  res.json({ ok: true });
+
+  // Do the work after responding so the response time doesn't reveal anything either.
+  try {
+    const user = await one("SELECT id, username, name, email FROM users WHERE lower(email) = $1", [email]);
+    if (!user) return;
+    const recent = await one("SELECT 1 FROM password_resets WHERE user_id = $1 AND created > $2", [
+      user.id,
+      Date.now() - RESET_COOLDOWN,
+    ]);
+    if (recent) return;
+
+    const token = randomBytes(32).toString("hex");
+    await pool.query("DELETE FROM password_resets WHERE user_id = $1", [user.id]);
+    await pool.query("INSERT INTO password_resets (token_hash, user_id, created, expires) VALUES ($1, $2, $3, $4)", [
+      sha256(token),
+      user.id,
+      Date.now(),
+      Date.now() + RESET_TTL,
+    ]);
+
+    const link = `${APP_URL}/reset-password?token=${token}`;
+    const hi = user.name || user.username;
+    await sendMail({
+      to: user.email,
+      subject: "Reset your LeetCode Tracker password",
+      text:
+        `Hi ${hi},\n\nSomeone asked to reset the password for your LeetCode Tracker account (${user.username}).\n\n` +
+        `Set a new password here (the link works once and expires in 30 minutes):\n${link}\n\n` +
+        `If this wasn't you, ignore this email; your password won't change.`,
+      html:
+        `<p>Hi ${escapeHtml(hi)},</p>` +
+        `<p>Someone asked to reset the password for your LeetCode Tracker account <b>${escapeHtml(user.username)}</b>.</p>` +
+        `<p><a href="${link}" style="display:inline-block;padding:10px 18px;background:#f59e0b;color:#1b1f27;` +
+        `border-radius:8px;text-decoration:none;font-weight:600">Set a new password</a></p>` +
+        `<p style="color:#6b7280;font-size:13px">The link works once and expires in 30 minutes. ` +
+        `If this wasn't you, ignore this email; your password won't change.</p>`,
+    });
+  } catch (err) {
+    console.error("Password reset email failed:", err);
+  }
+});
+
+// Body: { token, password }. Sets the new password, signs the account out
+// everywhere, and returns a fresh session so the user is signed straight in.
+app.post("/api/auth/reset", async (req, res) => {
+  const token = String(req.body?.token || "");
+  const password = String(req.body?.password || "");
+  if (password.length < 6) return res.status(400).json({ error: "Password must be at least 6 characters." });
+
+  const reset = await one("DELETE FROM password_resets WHERE token_hash = $1 RETURNING user_id, expires", [
+    sha256(token),
+  ]);
+  if (!reset || reset.expires < Date.now())
+    return res.status(400).json({ error: "This reset link is invalid or has expired. Please request a new one." });
+
+  const { salt, hash } = hashPassword(password);
+  const user = await one("UPDATE users SET pw_hash = $1, salt = $2 WHERE id = $3 RETURNING *", [
+    hash,
+    salt,
+    reset.user_id,
+  ]);
+  await pool.query("DELETE FROM password_resets WHERE user_id = $1", [user.id]);
+  await pool.query("DELETE FROM sessions WHERE user_id = $1", [user.id]);
+  res.json({ token: await createSession(user.id), user: publicUser(user) });
+});
+
+function escapeHtml(s) {
+  return String(s).replace(
+    /[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
+  );
+}
 
 app.post("/api/auth/logout", requireAuth, async (req, res) => {
   await pool.query("DELETE FROM sessions WHERE token = $1", [req.token]);
@@ -98,6 +202,10 @@ function readProfile(body) {
     return { error: "Profile picture must be a PNG, JPEG or WebP under 300 KB." };
   fields.avatar = avatar;
 
+  const email = readEmail(body?.email);
+  if (email === null) return { error: "Please enter a valid email address." };
+  fields.email = email || null;
+
   return { fields };
 }
 
@@ -106,11 +214,18 @@ app.get("/api/profile", requireAuth, (req, res) => res.json(fullProfile(req.user
 app.put("/api/profile", requireAuth, async (req, res) => {
   const { fields: f, error } = readProfile(req.body);
   if (error) return res.status(400).json({ error });
-  const user = await one(
-    `UPDATE users SET name = $1, education = $2, location = $3, bio = $4, links = $5, avatar = $6
-     WHERE id = $7 RETURNING *`,
-    [f.name, f.education, f.location, f.bio, JSON.stringify(f.links), f.avatar, req.user.id],
-  );
+  let user;
+  try {
+    user = await one(
+      `UPDATE users SET name = $1, education = $2, location = $3, bio = $4, links = $5, avatar = $6, email = $7
+       WHERE id = $8 RETURNING *`,
+      [f.name, f.education, f.location, f.bio, JSON.stringify(f.links), f.avatar, f.email, req.user.id],
+    );
+  } catch (err) {
+    const dup = duplicateError(err);
+    if (dup) return res.status(409).json({ error: dup });
+    throw err;
+  }
   res.json(fullProfile(user));
 });
 
@@ -133,7 +248,7 @@ app.put("/api/profile/password", requireAuth, async (req, res) => {
 
 app.get("/api/users", requireAuth, requireAdmin, async (req, res) => {
   const rows = await all(`
-    SELECT u.id, u.username, u.is_admin, u.created, u.name, u.avatar,
+    SELECT u.id, u.username, u.is_admin, u.created, u.name, u.avatar, u.email,
            COUNT(p.solved_on)::int AS solved
     FROM users u
     LEFT JOIN progress p ON p.user_id = u.id
@@ -146,10 +261,8 @@ app.get("/api/users", requireAuth, requireAdmin, async (req, res) => {
 // Body: { isAdmin: boolean }
 app.patch("/api/users/:id", requireAuth, requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
-  if (typeof req.body?.isAdmin !== "boolean")
-    return res.status(400).json({ error: "isAdmin must be true or false." });
-  if (id === req.user.id)
-    return res.status(400).json({ error: "You can't change your own role." });
+  if (typeof req.body?.isAdmin !== "boolean") return res.status(400).json({ error: "isAdmin must be true or false." });
+  if (id === req.user.id) return res.status(400).json({ error: "You can't change your own role." });
 
   // Only demote if another admin will remain, checked in the same statement.
   const user = await one(
@@ -280,5 +393,10 @@ app.use((err, req, res, next) => {
 });
 
 await initSchema();
+console.log(
+  mailConfigured
+    ? `Password reset emails: sending via Brevo, links point to ${APP_URL}`
+    : `Password reset emails: BREVO_API_KEY/MAIL_FROM not set, so reset links are printed here instead (${APP_URL})`,
+);
 const port = Number(process.env.PORT) || 4000;
 app.listen(port, () => console.log(`API listening on http://localhost:${port}`));

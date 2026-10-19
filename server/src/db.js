@@ -76,7 +76,17 @@ export async function initSchema() {
       ADD COLUMN IF NOT EXISTS location  TEXT  NOT NULL DEFAULT '',
       ADD COLUMN IF NOT EXISTS bio       TEXT  NOT NULL DEFAULT '',
       ADD COLUMN IF NOT EXISTS avatar    TEXT,
-      ADD COLUMN IF NOT EXISTS links     JSONB NOT NULL DEFAULT '{}';
+      ADD COLUMN IF NOT EXISTS links     JSONB NOT NULL DEFAULT '{}',
+      ADD COLUMN IF NOT EXISTS email     TEXT;
+    CREATE UNIQUE INDEX IF NOT EXISTS users_email_lower ON users (lower(email)) WHERE email IS NOT NULL;
+
+    -- One-time password reset links. Only a SHA-256 hash of the token is stored.
+    CREATE TABLE IF NOT EXISTS password_resets (
+      token_hash TEXT PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created    BIGINT NOT NULL,
+      expires    BIGINT NOT NULL
+    );
 
     CREATE TABLE IF NOT EXISTS sessions (
       token      TEXT PRIMARY KEY,
@@ -110,5 +120,6 @@ export async function initSchema() {
     ALTER TABLE sessions ENABLE ROW LEVEL SECURITY;
     ALTER TABLE problems ENABLE ROW LEVEL SECURITY;
     ALTER TABLE progress ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE password_resets ENABLE ROW LEVEL SECURITY;
   `);
 }

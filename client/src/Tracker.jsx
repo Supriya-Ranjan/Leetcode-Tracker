@@ -165,6 +165,15 @@ export default function Tracker({ user, onLogout, onUserChange }) {
         </div>
       </header>
 
+      {!user.email && view !== "profile" && (
+        <div className="banner">
+          Add your email so you can reset your password if you forget it.{" "}
+          <button className="link" onClick={() => openTab("profile")}>
+            Add email
+          </button>
+        </div>
+      )}
+
       <div className="tabs">
         {[
           ["problems", "Problems"],

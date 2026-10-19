@@ -52,6 +52,7 @@ export default function Members({ me }) {
             </div>
             <div className="meta">
               {u.name && <span>@{u.username} ·</span>}
+              {u.email ? <span>{u.email} ·</span> : <span className="muted-em">no email ·</span>}
               <span>{u.solved} solved</span>
               <span>
                 · Joined{" "}

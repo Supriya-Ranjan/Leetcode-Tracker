@@ -57,7 +57,14 @@ export default function Profile({ onUserChange }) {
         onSaved={(p) => {
           setForm(p);
           setSaved(p);
-          onUserChange({ id: p.id, username: p.username, isAdmin: p.isAdmin, name: p.name, avatar: p.avatar });
+          onUserChange({
+            id: p.id,
+            username: p.username,
+            isAdmin: p.isAdmin,
+            name: p.name,
+            avatar: p.avatar,
+            email: p.email,
+          });
         }}
       />
       <ChangePassword username={form.username} />
@@ -129,9 +136,20 @@ function ProfileDetails({ form, setForm, saved, onSaved }) {
           </div>
         </div>
 
-        <label className="full">
+        <label>
           <span>Name</span>
           <input value={form.name} onChange={set("name")} maxLength={60} placeholder="Your full name" />
+        </label>
+        <label>
+          <span>Email (for password resets)</span>
+          <input
+            type="email"
+            autoComplete="email"
+            value={form.email}
+            onChange={set("email")}
+            maxLength={254}
+            placeholder="you@example.com"
+          />
         </label>
         <label>
           <span>Education</span>

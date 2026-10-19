@@ -451,3 +451,23 @@ button.link.muted {
 .row > .avatar {
   margin-top: 2px;
 }
+.forgot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: -2px;
+  font-size: 13px;
+}
+.sent p {
+  margin: 0 0 8px;
+}
+.banner {
+  margin-top: 14px;
+  padding: 10px 14px;
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  font-size: 13px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--card));
+}
+.muted-em {
+  font-style: italic;
+}
