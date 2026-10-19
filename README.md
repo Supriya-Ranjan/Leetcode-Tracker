@@ -2,6 +2,10 @@
 
 A shared LeetCode practice tracker for a group. Admins curate a list of problems; every member ticks off what they've solved, keeps private notes per problem, and sees their progress by difficulty.
 
+**Live app:** https://leetcode-tracker-02sf.onrender.com/
+
+> Hosted on Render's free tier, so the first visit after a quiet spell can take 30–60 seconds while it wakes up.
+
 - **React** (Vite) frontend in [`client/`](client/)
 - **Node.js** (Express 5) API in [`server/`](server/)
 - **Postgres** database, hosted on [Supabase](https://supabase.com)
