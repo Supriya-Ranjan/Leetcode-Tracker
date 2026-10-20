@@ -285,13 +285,21 @@ app.patch("/api/users/:id", requireAuth, requireAdmin, async (req, res) => {
 
 const DIFFS = ["Easy", "Medium", "Hard"];
 
+// A list of tags (data structures or patterns). Also accepts a single string
+// from older clients. Trimmed, de-duplicated, at most 10 tags of 60 chars.
+function readTags(value) {
+  const list = Array.isArray(value) ? value : value ? [value] : [];
+  const tags = list.map((t) => String(t).trim().slice(0, 60)).filter(Boolean);
+  return [...new Set(tags)].slice(0, 10);
+}
+
 function readProblem(body) {
   const p = {
     title: String(body?.title || "").trim(),
     num: parseInt(body?.num, 10) || null,
     diff: DIFFS.includes(body?.diff) ? body.diff : "Medium",
-    ds: String(body?.ds || ""),
-    pat: String(body?.pat || ""),
+    ds: readTags(body?.ds),
+    pat: readTags(body?.pat),
     url: String(body?.url || "").trim(),
   };
   if (!p.title || !/^https?:\/\//i.test(p.url)) return null;

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { DIFFS, DS, PAT } from "./constants.js";
 
-export const EMPTY_FORM = { title: "", num: "", diff: "Medium", ds: "", pat: "", url: "" };
+export const EMPTY_FORM = { title: "", num: "", diff: "Medium", ds: [], pat: [], url: "" };
 
 // Add or edit a problem. `initial` is the problem being edited, or null to add a new one.
 // `onSubmit(form)` should save it and throw on failure.
@@ -12,8 +12,8 @@ export default function ProblemForm({ initial, onSubmit, onCancel }) {
           title: initial.title,
           num: initial.num || "",
           diff: initial.diff,
-          ds: initial.ds,
-          pat: initial.pat,
+          ds: initial.ds || [],
+          pat: initial.pat || [],
           url: initial.url,
         }
       : EMPTY_FORM,
@@ -60,18 +60,8 @@ export default function ProblemForm({ initial, onSubmit, onCancel }) {
             <option key={d}>{d}</option>
           ))}
         </select>
-        <select value={form.ds} onChange={set("ds")}>
-          <option value="">Data structure</option>
-          {DS.map((x) => (
-            <option key={x}>{x}</option>
-          ))}
-        </select>
-        <select value={form.pat} onChange={set("pat")}>
-          <option value="">Pattern</option>
-          {PAT.map((x) => (
-            <option key={x}>{x}</option>
-          ))}
-        </select>
+        <TagPicker label="Data structures" options={DS} value={form.ds} onChange={(ds) => setForm({ ...form, ds })} />
+        <TagPicker label="Patterns" options={PAT} value={form.pat} onChange={(pat) => setForm({ ...form, pat })} />
         <input
           className="full"
           type="url"
@@ -91,5 +81,43 @@ export default function ProblemForm({ initial, onSubmit, onCancel }) {
       </form>
       {note && <div className="note">{note}</div>}
     </div>
+  );
+}
+
+// Toggle chips for picking any number of options.
+function TagPicker({ label, options, value, onChange }) {
+  const toggle = (x) => onChange(value.includes(x) ? value.filter((v) => v !== x) : [...value, x]);
+  return (
+    <fieldset className="full tagpick">
+      <legend>
+        {label}
+        {value.length > 0 && (
+          <>
+            {" "}
+            <em>{value.length} selected</em>{" "}
+            <button type="button" className="link muted" onClick={() => onChange([])}>
+              Clear
+            </button>
+          </>
+        )}
+      </legend>
+      <div className="chips">
+        {options.map((x) => {
+          const on = value.includes(x);
+          return (
+            <button
+              key={x}
+              type="button"
+              className={"chip" + (on ? " on" : "")}
+              aria-pressed={on}
+              onClick={() => toggle(x)}
+            >
+              {on && "✓ "}
+              {x}
+            </button>
+          );
+        })}
+      </div>
+    </fieldset>
   );
 }

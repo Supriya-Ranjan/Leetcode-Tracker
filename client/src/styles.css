@@ -471,3 +471,28 @@ button.link.muted {
 .muted-em {
   font-style: italic;
 }
+.tagpick {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px 10px;
+  margin: 0;
+  min-width: 0;
+}
+.tagpick legend {
+  padding: 0 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.tagpick legend em {
+  font-style: normal;
+  color: var(--text);
+}
+.tagpick .chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.tagpick .chip {
+  font-size: 12px;
+  padding: 4px 10px;
+}

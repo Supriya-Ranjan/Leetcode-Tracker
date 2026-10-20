@@ -105,8 +105,8 @@ export default function Tracker({ user, onLogout, onUserChange }) {
   const doneN = all.filter((p) => prog.done[p.id]).length;
   const pct = all.length ? Math.round((doneN / all.length) * 100) : 0;
   const shown = all.filter((p) => {
-    if (fds && p.ds !== fds) return false;
-    if (fpat && p.pat !== fpat) return false;
+    if (fds && !p.ds.includes(fds)) return false;
+    if (fpat && !p.pat.includes(fpat)) return false;
     if (filter === "Pending") return !prog.done[p.id];
     if (filter === "Done") return !!prog.done[p.id];
     if (DIFFS.includes(filter)) return p.diff === filter;
@@ -261,8 +261,8 @@ function Row({ p, done, note, noteOpen, isAdmin, onToggle, onNoteToggle, onNoteS
         </div>
         <div className="meta">
           <span className={p.diff}>{p.diff}</span>
-          {p.ds && <span>· {p.ds}</span>}
-          {p.pat && <span>· {p.pat}</span>}
+          {p.ds.length > 0 && <span>· {p.ds.join(", ")}</span>}
+          {p.pat.length > 0 && <span>· {p.pat.join(", ")}</span>}
           {done?.on && <span>· Solved {done.on}</span>}
         </div>
         {noteOpen ? (

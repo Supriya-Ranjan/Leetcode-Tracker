@@ -99,11 +99,26 @@ export async function initSchema() {
       title      TEXT NOT NULL,
       num        INTEGER,
       diff       TEXT NOT NULL CHECK (diff IN ('Easy','Medium','Hard')),
-      ds         TEXT NOT NULL DEFAULT '',
-      pat        TEXT NOT NULL DEFAULT '',
+      ds         TEXT[] NOT NULL DEFAULT '{}',
+      pat        TEXT[] NOT NULL DEFAULT '{}',
       url        TEXT NOT NULL,
       created    BIGINT NOT NULL
     );
+
+    -- ds / pat used to hold a single value; convert them to lists once.
+    DO $$
+    BEGIN
+      IF (SELECT data_type FROM information_schema.columns
+          WHERE table_schema = current_schema() AND table_name = 'problems' AND column_name = 'ds') = 'text' THEN
+        ALTER TABLE problems
+          ALTER COLUMN ds  DROP DEFAULT,
+          ALTER COLUMN pat DROP DEFAULT,
+          ALTER COLUMN ds  TYPE TEXT[] USING CASE WHEN ds  = '' THEN '{}' ELSE ARRAY[ds]  END,
+          ALTER COLUMN pat TYPE TEXT[] USING CASE WHEN pat = '' THEN '{}' ELSE ARRAY[pat] END,
+          ALTER COLUMN ds  SET DEFAULT '{}',
+          ALTER COLUMN pat SET DEFAULT '{}';
+      END IF;
+    END $$;
 
     CREATE TABLE IF NOT EXISTS progress (
       user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
