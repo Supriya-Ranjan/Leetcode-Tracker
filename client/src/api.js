@@ -56,6 +56,7 @@ export const api = {
   addProblem: (p) => request("POST", "/problems", p),
   updateProblem: (id, p) => request("PUT", `/problems/${id}`, p),
   deleteProblem: (id) => request("DELETE", `/problems/${id}`),
+  setImportant: (id, important) => request("PATCH", `/problems/${id}/important`, { important }),
 
   users: () => request("GET", "/users"),
   setRole: (id, isAdmin) => request("PATCH", `/users/${id}`, { isAdmin }),

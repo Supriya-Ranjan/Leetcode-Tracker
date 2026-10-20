@@ -2,7 +2,7 @@ import { useState } from "react";
 import { DIFFS, DS, PAT } from "./constants.js";
 import { findDuplicate } from "./problemKey.js";
 
-export const EMPTY_FORM = { title: "", num: "", diff: "Medium", ds: [], pat: [], url: "" };
+export const EMPTY_FORM = { title: "", num: "", diff: "Medium", ds: [], pat: [], url: "", important: false };
 
 // Add or edit a problem. `initial` is the problem being edited, or null to add a new one.
 // `problems` is the current list, used to warn about duplicates as you type.
@@ -17,6 +17,7 @@ export default function ProblemForm({ initial, problems = [], onSubmit, onCancel
           ds: initial.ds || [],
           pat: initial.pat || [],
           url: initial.url,
+          important: !!initial.important,
         }
       : EMPTY_FORM,
   );
@@ -74,6 +75,16 @@ export default function ProblemForm({ initial, problems = [], onSubmit, onCancel
           onChange={set("url")}
           required
         />
+        <label className="full check">
+          <input
+            type="checkbox"
+            checked={form.important}
+            onChange={(e) => setForm({ ...form, important: e.target.checked })}
+          />
+          <span>
+            <span className="star-text">★</span> Mark as important
+          </span>
+        </label>
         {dup && (
           <div className="full dup" role="alert">
             Already added (same {dup.why}):{" "}

@@ -6,7 +6,7 @@ import Members from "./Members.jsx";
 import ProblemForm from "./ProblemForm.jsx";
 import Profile from "./Profile.jsx";
 
-const FILTERS = ["All", "Pending", "Done", ...DIFFS];
+const FILTERS = ["All", "Important", "Pending", "Done", ...DIFFS];
 
 export default function Tracker({ user, onLogout, onUserChange }) {
   const [problems, setProblems] = useState(null);
@@ -90,6 +90,16 @@ export default function Tracker({ user, onLogout, onUserChange }) {
     setView(k);
   }
 
+  async function toggleImportant(p) {
+    try {
+      const saved = await api.setImportant(p.id, !p.important);
+      setProblems((ps) => ps.map((x) => (x.id === saved.id ? saved : x)));
+      setSaveError("");
+    } catch (e) {
+      setSaveError(e.message);
+    }
+  }
+
   async function remove(p) {
     if (!confirm("Delete this problem for everyone?")) return;
     try {
@@ -107,6 +117,7 @@ export default function Tracker({ user, onLogout, onUserChange }) {
   const shown = all.filter((p) => {
     if (fds && !p.ds.includes(fds)) return false;
     if (fpat && !p.pat.includes(fpat)) return false;
+    if (filter === "Important") return p.important;
     if (filter === "Pending") return !prog.done[p.id];
     if (filter === "Done") return !!prog.done[p.id];
     if (DIFFS.includes(filter)) return p.diff === filter;
@@ -140,6 +151,7 @@ export default function Tracker({ user, onLogout, onUserChange }) {
         onNoteSave={(t) => saveNote(p, t)}
         onEdit={() => startEdit(p)}
         onDelete={() => remove(p)}
+        onStar={() => toggleImportant(p)}
       />
     ));
 
@@ -224,13 +236,19 @@ export default function Tracker({ user, onLogout, onUserChange }) {
                   </span>
                 );
               })}
+              {all.some((p) => p.important) && (
+                <span>
+                  <b className="star-text">★ Important</b> {all.filter((p) => p.important && prog.done[p.id]).length}/
+                  {all.filter((p) => p.important).length}
+                </span>
+              )}
             </div>
           </div>
 
           <div className="filters">
             {FILTERS.map((f) => (
               <button key={f} className={"chip" + (f === filter ? " on" : "")} onClick={() => setFilter(f)}>
-                {f}
+                {f === "Important" ? "★ Important" : f}
               </button>
             ))}
             <select className="fsel" value={fds} onChange={(e) => setFds(e.target.value)}>
@@ -254,12 +272,29 @@ export default function Tracker({ user, onLogout, onUserChange }) {
   );
 }
 
-function Row({ p, done, note, noteOpen, isAdmin, onToggle, onNoteToggle, onNoteSave, onEdit, onDelete }) {
+function Row({ p, done, note, noteOpen, isAdmin, onToggle, onNoteToggle, onNoteSave, onEdit, onDelete, onStar }) {
   return (
-    <div className={"row" + (done ? " done" : "")}>
+    <div className={"row" + (done ? " done" : "") + (p.important ? " important" : "")}>
       <input type="checkbox" checked={!!done} onChange={(e) => onToggle(e.target.checked)} aria-label="Mark done" />
       <div className="info">
         <div className="t">
+          {isAdmin ? (
+            <button
+              className={"star" + (p.important ? " on" : "")}
+              onClick={onStar}
+              aria-pressed={p.important}
+              aria-label={p.important ? "Unmark as important" : "Mark as important"}
+              title={p.important ? "Important (click to unmark)" : "Mark as important"}
+            >
+              {p.important ? "★" : "☆"}
+            </button>
+          ) : (
+            p.important && (
+              <span className="star on" title="Important" aria-label="Important">
+                ★
+              </span>
+            )
+          )}
           {p.num ? p.num + ". " : ""}
           <a href={p.url} target="_blank" rel="noopener">
             {p.title}
@@ -270,6 +305,9 @@ function Row({ p, done, note, noteOpen, isAdmin, onToggle, onNoteToggle, onNoteS
           {p.ds.length > 0 && <span>· {p.ds.join(", ")}</span>}
           {p.pat.length > 0 && <span>· {p.pat.join(", ")}</span>}
           {done?.on && <span>· Solved {done.on}</span>}
+          {isAdmin && (
+            <span className="added-by">· Added by {p.addedBy ? p.addedBy.name || p.addedBy.username : "unknown"}</span>
+          )}
         </div>
         {noteOpen ? (
           <textarea

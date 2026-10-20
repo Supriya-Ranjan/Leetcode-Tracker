@@ -534,3 +534,42 @@ button.link:disabled {
   opacity: 0.5;
   cursor: default;
 }
+.star {
+  display: inline-block;
+  margin-right: 6px;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+}
+button.star {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  font-size: 16px;
+}
+button.star:hover,
+.star.on,
+.star-text {
+  color: var(--accent);
+}
+.row.important {
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  border-radius: 8px;
+}
+.added-by {
+  font-style: italic;
+}
+label.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+label.check input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}

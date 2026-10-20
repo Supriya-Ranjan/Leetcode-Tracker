@@ -145,10 +145,11 @@ All endpoints except register and login need an `Authorization: Bearer <token>` 
 | PUT | `/api/profile/password` | user | Change password `{ current, next }`; signs out other sessions |
 | POST | `/api/profile/email` | user | Start an email change `{ email }`; emails a 6-digit code to the new address |
 | POST | `/api/profile/email/verify` | user | Confirm it `{ code }`; updates the email and notifies the old address |
-| GET | `/api/problems` | user | All problems |
+| GET | `/api/problems` | user | All problems (admins also get `addedBy`) |
 | POST | `/api/problems` | admin | Add a problem |
 | PUT | `/api/problems/:id` | admin | Edit a problem |
 | DELETE | `/api/problems/:id` | admin | Delete a problem (and everyone's progress on it) |
+| PATCH | `/api/problems/:id/important` | admin | Star or unstar a problem `{ important }` |
 | GET | `/api/progress` | user | Own progress `{ done, notes }` |
 | PUT | `/api/progress/:problemId` | user | Update own progress `{ done?, note? }` |
 | GET | `/api/users` | admin | All users with solved counts |

@@ -389,9 +389,26 @@ function readProblem(body) {
     ds: readTags(body?.ds),
     pat: readTags(body?.pat),
     url: String(body?.url || "").trim(),
+    important: body?.important === true,
   };
   if (!p.title || !/^https?:\/\//i.test(p.url)) return null;
   return p;
+}
+
+const PROBLEM_SELECT = `
+  SELECT p.*, u.username AS added_by_username, u.name AS added_by_name
+  FROM problems p LEFT JOIN users u ON u.id = p.created_by`;
+
+// API shape of a problem row. Only admins see who added it.
+function toProblem(row, isAdmin) {
+  const { created_by, added_by_username, added_by_name, ...p } = row;
+  if (isAdmin) p.addedBy = added_by_username ? { username: added_by_username, name: added_by_name || "" } : null;
+  return p;
+}
+
+async function getProblem(id, isAdmin) {
+  const row = await one(`${PROBLEM_SELECT} WHERE p.id = $1`, [id]);
+  return row && toProblem(row, isAdmin);
 }
 
 function problemId(req) {
@@ -425,7 +442,8 @@ async function findDuplicate(p, exceptId = null) {
 }
 
 app.get("/api/problems", requireAuth, async (req, res) => {
-  res.json(await all("SELECT * FROM problems ORDER BY created, id"));
+  const rows = await all(`${PROBLEM_SELECT} ORDER BY p.created, p.id`);
+  res.json(rows.map((r) => toProblem(r, req.user.is_admin)));
 });
 
 app.post("/api/problems", requireAuth, requireAdmin, async (req, res) => {
@@ -433,12 +451,24 @@ app.post("/api/problems", requireAuth, requireAdmin, async (req, res) => {
   if (!p) return res.status(400).json({ error: "A title and a valid http(s) problem link are required." });
   const dup = await findDuplicate(p);
   if (dup) return res.status(409).json({ error: dup });
-  const saved = await one(
-    `INSERT INTO problems (title, num, diff, ds, pat, url, created)
-     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-    [p.title, p.num, p.diff, p.ds, p.pat, p.url, Date.now()],
+  const { id } = await one(
+    `INSERT INTO problems (title, num, diff, ds, pat, url, important, created_by, created)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+    [p.title, p.num, p.diff, p.ds, p.pat, p.url, p.important, req.user.id, Date.now()],
   );
-  res.status(201).json(saved);
+  res.status(201).json(await getProblem(id, true));
+});
+
+// Body: { important: boolean }. Quick star/unstar from the problem list.
+app.patch("/api/problems/:id/important", requireAuth, requireAdmin, async (req, res) => {
+  if (typeof req.body?.important !== "boolean")
+    return res.status(400).json({ error: "important must be true or false." });
+  const row = await one("UPDATE problems SET important = $1 WHERE id = $2 RETURNING id", [
+    req.body.important,
+    problemId(req),
+  ]);
+  if (!row) return res.status(404).json({ error: "Problem not found." });
+  res.json(await getProblem(row.id, true));
 });
 
 app.put("/api/problems/:id", requireAuth, requireAdmin, async (req, res) => {
@@ -447,12 +477,12 @@ app.put("/api/problems/:id", requireAuth, requireAdmin, async (req, res) => {
   const dup = await findDuplicate(p, problemId(req));
   if (dup) return res.status(409).json({ error: dup });
   const saved = await one(
-    `UPDATE problems SET title = $1, num = $2, diff = $3, ds = $4, pat = $5, url = $6
-     WHERE id = $7 RETURNING *`,
-    [p.title, p.num, p.diff, p.ds, p.pat, p.url, problemId(req)],
+    `UPDATE problems SET title = $1, num = $2, diff = $3, ds = $4, pat = $5, url = $6, important = $7
+     WHERE id = $8 RETURNING id`,
+    [p.title, p.num, p.diff, p.ds, p.pat, p.url, p.important, problemId(req)],
   );
   if (!saved) return res.status(404).json({ error: "Problem not found." });
-  res.json(saved);
+  res.json(await getProblem(saved.id, true));
 });
 
 app.delete("/api/problems/:id", requireAuth, requireAdmin, async (req, res) => {

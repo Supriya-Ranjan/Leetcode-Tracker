@@ -131,6 +131,12 @@ export async function initSchema() {
       END IF;
     END $$;
 
+    -- Who added each problem (unknown for ones added before this was tracked),
+    -- and whether an admin starred it as important.
+    ALTER TABLE problems
+      ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      ADD COLUMN IF NOT EXISTS important  BOOLEAN NOT NULL DEFAULT FALSE;
+
     CREATE TABLE IF NOT EXISTS progress (
       user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       problem_id INTEGER NOT NULL REFERENCES problems(id) ON DELETE CASCADE,
