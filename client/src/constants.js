@@ -10,6 +10,7 @@ export const DS = [
   "Heap / Priority Queue",
   "Tree",
   "Binary Search Tree",
+  "Binary Tree",
   "Trie",
   "Graph",
   "Matrix",

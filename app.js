@@ -21,6 +21,7 @@
     "Heap / Priority Queue",
     "Tree",
     "Binary Search Tree",
+    "Binary Tree",
     "Trie",
     "Graph",
     "Matrix",
@@ -280,8 +281,7 @@
   });
 
   $("list").addEventListener("focusout", function (e) {
-    if (!e.target.classList || !e.target.classList.contains("nta"))
-      return;
+    if (!e.target.classList || !e.target.classList.contains("nta")) return;
     var row = e.target.closest(".row");
     if (!row) return;
     var id = row.getAttribute("data-id"),
@@ -410,7 +410,8 @@
             };
           },
           add: function (v) {
-            var id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+            var id =
+              Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
             return write(path, id, function (c) {
               c[id] = v;
             });
@@ -449,8 +450,7 @@
       isAdmin = true;
     }
     if (!db || !id) {
-      $("user").textContent =
-        "Please sign in to claude.ai to use the tracker";
+      $("user").textContent = "Please sign in to claude.ai to use the tracker";
       $("list").innerHTML =
         '<div class="empty">Sign in to see the problem list and save your progress.</div>';
       return;
