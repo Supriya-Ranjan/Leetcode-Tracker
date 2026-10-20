@@ -311,6 +311,31 @@ function problemId(req) {
   return Number.isInteger(id) && id > 0 ? id : null;
 }
 
+// Same problem → same key, however the link was copied: LeetCode links reduce to
+// their slug, so /problems/two-sum, /problems/two-sum/description/ and
+// ?envType=... variants all match. Keep in sync with client/src/problemKey.js.
+function problemKey(url) {
+  try {
+    const u = new URL(url);
+    const host = u.hostname.toLowerCase().replace(/^www\./, "");
+    const slug = /^\/problems\/([^/]+)/i.exec(u.pathname)?.[1];
+    if (/(^|\.)leetcode\.(com|cn)$/.test(host) && slug) return "leetcode/" + slug.toLowerCase();
+    return host + u.pathname.replace(/\/+$/, "").toLowerCase();
+  } catch {
+    return url.trim().toLowerCase();
+  }
+}
+
+// Returns an error message if another problem has the same number or link.
+async function findDuplicate(p, exceptId = null) {
+  const key = problemKey(p.url);
+  const others = await all("SELECT id, num, title, url FROM problems WHERE id IS DISTINCT FROM $1", [exceptId]);
+  const dup = others.find((o) => (p.num && o.num === p.num) || problemKey(o.url) === key);
+  if (!dup) return null;
+  const why = p.num && dup.num === p.num ? `number ${p.num}` : "link";
+  return `Already added (same ${why}): ${dup.num ? dup.num + ". " : ""}${dup.title}`;
+}
+
 app.get("/api/problems", requireAuth, async (req, res) => {
   res.json(await all("SELECT * FROM problems ORDER BY created, id"));
 });
@@ -318,6 +343,8 @@ app.get("/api/problems", requireAuth, async (req, res) => {
 app.post("/api/problems", requireAuth, requireAdmin, async (req, res) => {
   const p = readProblem(req.body);
   if (!p) return res.status(400).json({ error: "A title and a valid http(s) problem link are required." });
+  const dup = await findDuplicate(p);
+  if (dup) return res.status(409).json({ error: dup });
   const saved = await one(
     `INSERT INTO problems (title, num, diff, ds, pat, url, created)
      VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
@@ -329,6 +356,8 @@ app.post("/api/problems", requireAuth, requireAdmin, async (req, res) => {
 app.put("/api/problems/:id", requireAuth, requireAdmin, async (req, res) => {
   const p = readProblem(req.body);
   if (!p) return res.status(400).json({ error: "A title and a valid http(s) problem link are required." });
+  const dup = await findDuplicate(p, problemId(req));
+  if (dup) return res.status(409).json({ error: dup });
   const saved = await one(
     `UPDATE problems SET title = $1, num = $2, diff = $3, ds = $4, pat = $5, url = $6
      WHERE id = $7 RETURNING *`,

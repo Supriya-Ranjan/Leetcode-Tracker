@@ -496,3 +496,15 @@ button.link.muted {
   font-size: 12px;
   padding: 4px 10px;
 }
+.dup {
+  padding: 8px 12px;
+  border: 1px solid var(--hard);
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--hard);
+  background: color-mix(in srgb, var(--hard) 8%, var(--card));
+}
+.dup a {
+  color: inherit;
+  font-weight: 600;
+}

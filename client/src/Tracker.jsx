@@ -196,7 +196,13 @@ export default function Tracker({ user, onLogout, onUserChange }) {
       ) : view === "members" && user.isAdmin ? (
         <Members me={user} />
       ) : view === "add" && user.isAdmin ? (
-        <ProblemForm key={editing?.id ?? "new"} initial={editing} onSubmit={saveProblem} onCancel={stopEdit} />
+        <ProblemForm
+          key={editing?.id ?? "new"}
+          initial={editing}
+          problems={problems || []}
+          onSubmit={saveProblem}
+          onCancel={stopEdit}
+        />
       ) : (
         <>
           <div className="card">

@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { DIFFS, DS, PAT } from "./constants.js";
+import { findDuplicate } from "./problemKey.js";
 
 export const EMPTY_FORM = { title: "", num: "", diff: "Medium", ds: [], pat: [], url: "" };
 
 // Add or edit a problem. `initial` is the problem being edited, or null to add a new one.
+// `problems` is the current list, used to warn about duplicates as you type.
 // `onSubmit(form)` should save it and throw on failure.
-export default function ProblemForm({ initial, onSubmit, onCancel }) {
+export default function ProblemForm({ initial, problems = [], onSubmit, onCancel }) {
   const [form, setForm] = useState(
     initial
       ? {
@@ -21,6 +23,7 @@ export default function ProblemForm({ initial, onSubmit, onCancel }) {
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  const dup = findDuplicate(form, problems, initial?.id ?? null);
 
   async function submit(e) {
     e.preventDefault();
@@ -28,6 +31,7 @@ export default function ProblemForm({ initial, onSubmit, onCancel }) {
       setNote("A title and a valid http(s) problem link are required.");
       return;
     }
+    if (dup) return;
     setBusy(true);
     try {
       await onSubmit(form);
@@ -70,7 +74,16 @@ export default function ProblemForm({ initial, onSubmit, onCancel }) {
           onChange={set("url")}
           required
         />
-        <button className="pri full" type="submit" disabled={busy}>
+        {dup && (
+          <div className="full dup" role="alert">
+            Already added (same {dup.why}):{" "}
+            <a href={dup.problem.url} target="_blank" rel="noopener">
+              {dup.problem.num ? dup.problem.num + ". " : ""}
+              {dup.problem.title}
+            </a>
+          </div>
+        )}
+        <button className="pri full" type="submit" disabled={busy || !!dup}>
           {busy ? "Saving…" : initial ? "Save changes" : "Add problem"}
         </button>
         {initial && (
