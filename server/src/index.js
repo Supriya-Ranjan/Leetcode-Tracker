@@ -1,5 +1,5 @@
 import express from "express";
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, randomInt, timingSafeEqual } from "node:crypto";
 import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -202,10 +202,7 @@ function readProfile(body) {
     return { error: "Profile picture must be a PNG, JPEG or WebP under 300 KB." };
   fields.avatar = avatar;
 
-  const email = readEmail(body?.email);
-  if (email === null) return { error: "Please enter a valid email address." };
-  fields.email = email || null;
-
+  // Email isn't changed here; it goes through the code-verified flow below.
   return { fields };
 }
 
@@ -214,17 +211,108 @@ app.get("/api/profile", requireAuth, (req, res) => res.json(fullProfile(req.user
 app.put("/api/profile", requireAuth, async (req, res) => {
   const { fields: f, error } = readProfile(req.body);
   if (error) return res.status(400).json({ error });
+  const user = await one(
+    `UPDATE users SET name = $1, education = $2, location = $3, bio = $4, links = $5, avatar = $6
+     WHERE id = $7 RETURNING *`,
+    [f.name, f.education, f.location, f.bio, JSON.stringify(f.links), f.avatar, req.user.id],
+  );
+  res.json(fullProfile(user));
+});
+
+// ---------- change email (verified with a code sent to the new address) ----------
+
+const CODE_TTL = 10 * 60 * 1000; // codes are valid for 10 minutes
+const CODE_COOLDOWN = 60 * 1000; // at most one code per minute
+const CODE_MAX_ATTEMPTS = 5;
+
+const codeHash = (userId, code) => sha256(`${userId}:${code}`);
+
+// Body: { email }. Emails a 6-digit code to the new address.
+app.post("/api/profile/email", requireAuth, async (req, res) => {
+  const email = readEmail(req.body?.email);
+  if (!email) return res.status(400).json({ error: "Please enter a valid email address." });
+  if (email === (req.user.email || "").toLowerCase())
+    return res.status(400).json({ error: "That's already your email." });
+  if (await one("SELECT 1 FROM users WHERE lower(email) = $1 AND id <> $2", [email, req.user.id]))
+    return res.status(409).json({ error: "That email is already used by another account." });
+
+  const pending = await one("SELECT created FROM email_changes WHERE user_id = $1", [req.user.id]);
+  if (pending && pending.created > Date.now() - CODE_COOLDOWN)
+    return res.status(429).json({ error: "Please wait a minute before requesting another code." });
+
+  const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
+  await pool.query(
+    `INSERT INTO email_changes (user_id, new_email, code_hash, attempts, created, expires)
+     VALUES ($1, $2, $3, 0, $4, $5)
+     ON CONFLICT (user_id) DO UPDATE SET new_email = excluded.new_email, code_hash = excluded.code_hash,
+       attempts = 0, created = excluded.created, expires = excluded.expires`,
+    [req.user.id, email, codeHash(req.user.id, code), Date.now(), Date.now() + CODE_TTL],
+  );
+
+  try {
+    await sendMail({
+      to: email,
+      subject: `${code} is your LeetCode Tracker verification code`,
+      text:
+        `Your code to confirm this email for LeetCode Tracker (${req.user.username}) is:\n\n${code}\n\n` +
+        `It expires in 10 minutes. If you didn't ask for this, ignore this email.`,
+      html:
+        `<p>Your code to confirm this email for LeetCode Tracker (<b>${escapeHtml(req.user.username)}</b>) is:</p>` +
+        `<p style="font-size:28px;font-weight:700;letter-spacing:6px;margin:12px 0">${code}</p>` +
+        `<p style="color:#6b7280;font-size:13px">It expires in 10 minutes. If you didn't ask for this, ignore this email.</p>`,
+    });
+  } catch (err) {
+    console.error("Email verification code failed:", err);
+    await pool.query("DELETE FROM email_changes WHERE user_id = $1", [req.user.id]);
+    return res.status(502).json({ error: "Couldn't send the code right now. Please try again in a moment." });
+  }
+  res.json({ sentTo: email, expiresInMinutes: CODE_TTL / 60000 });
+});
+
+// Body: { code }. Confirms the pending change and updates the account's email.
+app.post("/api/profile/email/verify", requireAuth, async (req, res) => {
+  const code = String(req.body?.code || "").replace(/\s/g, "");
+  const pending = await one("SELECT * FROM email_changes WHERE user_id = $1", [req.user.id]);
+  if (!pending || pending.expires < Date.now())
+    return res.status(400).json({ error: "This code has expired. Please request a new one." });
+  if (pending.attempts >= CODE_MAX_ATTEMPTS)
+    return res.status(400).json({ error: "Too many wrong codes. Please request a new one." });
+
+  const a = Buffer.from(codeHash(req.user.id, code));
+  const b = Buffer.from(pending.code_hash);
+  if (!/^\d{6}$/.test(code) || a.length !== b.length || !timingSafeEqual(a, b)) {
+    await pool.query("UPDATE email_changes SET attempts = attempts + 1 WHERE user_id = $1", [req.user.id]);
+    const left = CODE_MAX_ATTEMPTS - pending.attempts - 1;
+    return res.status(400).json({
+      error:
+        left > 0
+          ? `That code isn't right. ${left} ${left === 1 ? "try" : "tries"} left.`
+          : "Too many wrong codes. Please request a new one.",
+    });
+  }
+
   let user;
   try {
-    user = await one(
-      `UPDATE users SET name = $1, education = $2, location = $3, bio = $4, links = $5, avatar = $6, email = $7
-       WHERE id = $8 RETURNING *`,
-      [f.name, f.education, f.location, f.bio, JSON.stringify(f.links), f.avatar, f.email, req.user.id],
-    );
+    user = await one("UPDATE users SET email = $1 WHERE id = $2 RETURNING *", [pending.new_email, req.user.id]);
   } catch (err) {
     const dup = duplicateError(err);
     if (dup) return res.status(409).json({ error: dup });
     throw err;
+  }
+  await pool.query("DELETE FROM email_changes WHERE user_id = $1", [req.user.id]);
+
+  // Let the old address know, in case this wasn't them.
+  if (req.user.email && req.user.email !== user.email) {
+    sendMail({
+      to: req.user.email,
+      subject: "Your LeetCode Tracker email was changed",
+      text:
+        `The email on your LeetCode Tracker account (${user.username}) was changed to ${user.email}.\n\n` +
+        `If you didn't do this, sign in and change your password, or contact an admin.`,
+      html:
+        `<p>The email on your LeetCode Tracker account <b>${escapeHtml(user.username)}</b> was changed to ` +
+        `<b>${escapeHtml(user.email)}</b>.</p><p>If you didn't do this, sign in and change your password, or contact an admin.</p>`,
+    }).catch((err) => console.error("Email-changed notice failed:", err));
   }
   res.json(fullProfile(user));
 });

@@ -67,8 +67,155 @@ export default function Profile({ onUserChange }) {
           });
         }}
       />
+      <ChangeEmail
+        current={saved.email}
+        onChanged={(p) => {
+          // Only the email changed; keep any unsaved edits in the profile form.
+          setForm((f) => ({ ...f, email: p.email }));
+          setSaved((s) => ({ ...s, email: p.email }));
+          onUserChange({
+            id: p.id,
+            username: p.username,
+            isAdmin: p.isAdmin,
+            name: p.name,
+            avatar: p.avatar,
+            email: p.email,
+          });
+        }}
+      />
       <ChangePassword username={form.username} />
     </>
+  );
+}
+
+// Changing (or adding) the email needs a 6-digit code sent to the new address.
+function ChangeEmail({ current, onChanged }) {
+  const [step, setStep] = useState("idle"); // idle → enter → code
+  const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
+  const [sentTo, setSentTo] = useState("");
+  const [note, setNote] = useState({ text: "", ok: false });
+  const [busy, setBusy] = useState(false);
+
+  function reset() {
+    setStep("idle");
+    setEmail("");
+    setCode("");
+    setNote({ text: "" });
+  }
+
+  async function sendCode(e) {
+    e?.preventDefault();
+    setBusy(true);
+    setNote({ text: "" });
+    try {
+      const r = await api.requestEmailCode(email);
+      setSentTo(r.sentTo);
+      setCode("");
+      setStep("code");
+      setNote({
+        text: `We sent a 6-digit code to ${r.sentTo}. It expires in ${r.expiresInMinutes} minutes.`,
+        ok: true,
+      });
+    } catch (err) {
+      setNote({ text: err.message });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function verify(e) {
+    e.preventDefault();
+    setBusy(true);
+    setNote({ text: "" });
+    try {
+      onChanged(await api.verifyEmailCode(code));
+      setStep("idle");
+      setEmail("");
+      setCode("");
+      setNote({ text: "Email updated.", ok: true });
+    } catch (err) {
+      setNote({ text: err.message });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card">
+      <h2>Email</h2>
+      {step === "idle" && (
+        <div className="email-row">
+          <div>
+            {current ? <b>{current}</b> : <span className="muted-em">No email yet</span>}
+            <div className="note">Used to reset your password if you forget it.</div>
+          </div>
+          <button type="button" className="link" onClick={() => setStep("enter")}>
+            {current ? "Change" : "Add email"}
+          </button>
+        </div>
+      )}
+
+      {step === "enter" && (
+        <form onSubmit={sendCode} className="profile">
+          <label className="full">
+            <span>New email</span>
+            <input
+              type="email"
+              autoComplete="email"
+              autoFocus
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              maxLength={254}
+              placeholder="you@example.com"
+              required
+            />
+          </label>
+          <button className="pri" type="submit" disabled={busy}>
+            {busy ? "Sending…" : "Send code"}
+          </button>
+          <button type="button" className="link muted" onClick={reset}>
+            Cancel
+          </button>
+        </form>
+      )}
+
+      {step === "code" && (
+        <form onSubmit={verify} className="profile">
+          <label className="full">
+            <span>Code sent to {sentTo}</span>
+            <input
+              className="otp"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              autoFocus
+              maxLength={6}
+              pattern="\d{6}"
+              placeholder="123456"
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              required
+            />
+          </label>
+          <button className="pri" type="submit" disabled={busy || code.length !== 6}>
+            {busy ? "Checking…" : "Verify"}
+          </button>
+          <div className="otp-actions">
+            <button type="button" className="link" disabled={busy} onClick={sendCode}>
+              Resend code
+            </button>
+            <button type="button" className="link muted" onClick={() => setStep("enter")}>
+              Use a different email
+            </button>
+            <button type="button" className="link muted" onClick={reset}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+
+      {note.text && <div className={"note" + (note.ok ? "" : " err")}>{note.text}</div>}
+    </div>
   );
 }
 
@@ -136,20 +283,9 @@ function ProfileDetails({ form, setForm, saved, onSaved }) {
           </div>
         </div>
 
-        <label>
+        <label className="full">
           <span>Name</span>
           <input value={form.name} onChange={set("name")} maxLength={60} placeholder="Your full name" />
-        </label>
-        <label>
-          <span>Email (for password resets)</span>
-          <input
-            type="email"
-            autoComplete="email"
-            value={form.email}
-            onChange={set("email")}
-            maxLength={254}
-            placeholder="you@example.com"
-          />
         </label>
         <label>
           <span>Education</span>

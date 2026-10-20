@@ -49,6 +49,8 @@ export const api = {
   profile: () => request("GET", "/profile"),
   saveProfile: (p) => request("PUT", "/profile", p),
   changePassword: (current, next) => request("PUT", "/profile/password", { current, next }),
+  requestEmailCode: (email) => request("POST", "/profile/email", { email }),
+  verifyEmailCode: (code) => request("POST", "/profile/email/verify", { code }),
 
   problems: () => request("GET", "/problems"),
   addProblem: (p) => request("POST", "/problems", p),

@@ -88,6 +88,17 @@ export async function initSchema() {
       expires    BIGINT NOT NULL
     );
 
+    -- Pending email changes, confirmed with a 6-digit code sent to the new address.
+    -- One per user; only a hash of the code is stored.
+    CREATE TABLE IF NOT EXISTS email_changes (
+      user_id    INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      new_email  TEXT NOT NULL,
+      code_hash  TEXT NOT NULL,
+      attempts   INTEGER NOT NULL DEFAULT 0,
+      created    BIGINT NOT NULL,
+      expires    BIGINT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS sessions (
       token      TEXT PRIMARY KEY,
       user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -136,5 +147,6 @@ export async function initSchema() {
     ALTER TABLE problems ENABLE ROW LEVEL SECURITY;
     ALTER TABLE progress ENABLE ROW LEVEL SECURITY;
     ALTER TABLE password_resets ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE email_changes ENABLE ROW LEVEL SECURITY;
   `);
 }

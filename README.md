@@ -143,6 +143,8 @@ All endpoints except register and login need an `Authorization: Bearer <token>` 
 | GET | `/api/profile` | user | Own full profile |
 | PUT | `/api/profile` | user | Update profile `{ name, education, location, bio, links, avatar }` |
 | PUT | `/api/profile/password` | user | Change password `{ current, next }`; signs out other sessions |
+| POST | `/api/profile/email` | user | Start an email change `{ email }`; emails a 6-digit code to the new address |
+| POST | `/api/profile/email/verify` | user | Confirm it `{ code }`; updates the email and notifies the old address |
 | GET | `/api/problems` | user | All problems |
 | POST | `/api/problems` | admin | Add a problem |
 | PUT | `/api/problems/:id` | admin | Edit a problem |
@@ -159,6 +161,7 @@ Four tables, created automatically by [`server/src/db.js`](server/src/db.js):
 - `users`: account, role and profile fields. Passwords are hashed with scrypt and a per-user salt.
 - `sessions`: login tokens.
 - `password_resets`: pending reset links. Only a SHA-256 hash of each token is stored.
+- `email_changes`: pending email changes and their (hashed) verification codes, one per user.
 - `problems`: the shared problem list.
 - `progress`: one row per user per problem (solved date and note).
 

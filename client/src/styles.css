@@ -508,3 +508,29 @@ button.link.muted {
   color: inherit;
   font-weight: 600;
 }
+.email-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.email-row .note {
+  margin-top: 2px;
+}
+input.otp {
+  font-size: 22px;
+  letter-spacing: 8px;
+  font-variant-numeric: tabular-nums;
+  max-width: 220px;
+}
+.otp-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
+  font-size: 13px;
+}
+button.link:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
